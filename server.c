@@ -70,6 +70,8 @@ int main(int argc, char *argv[]) {
         printf("Successfully recieved %d bytes\n", recieved);
     }
 
+    printf("sent message : %s\n", buffer);
+
     //condition check for the message
     char* returnMessage;
 
@@ -79,7 +81,7 @@ int main(int argc, char *argv[]) {
         returnMessage = "no";
     }
 
-    printf("return message : %s\n", returnMessage);
+    printf("message to return : %s\n", returnMessage);
 
     //sending message back
     int sent = sendto(sock, returnMessage, sizeof(returnMessage), 0, (struct sockaddr*)&outsideInfo, outsideSize);
