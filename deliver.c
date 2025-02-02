@@ -17,6 +17,15 @@ int errorCheck(char * message){
     return err;
 }
 
+//the struct for the packets
+struct packet {
+    unsigned int total_frag;
+    unsigned int frag_no;
+    unsigned int size;
+    char* filename;
+    char filedata[1000];
+};
+
 int main(int argc, char *argv[]) {
     //checking validity of the input based on number of inputs
     if( argc != 3){
@@ -47,10 +56,10 @@ int main(int argc, char *argv[]) {
     // b. else, exit
 
     //checking if the file exists 
-    if(access(filename, F_OK | W_OK | X_OK) == -1){
+    if(access(filename, F_OK) == -1){
         return errorCheck("File does not exist");
     }
-    
+
     //open a socket
     int sock = socket(AF_INET,  SOCK_DGRAM, 0);
 
@@ -63,6 +72,38 @@ int main(int argc, char *argv[]) {
     //creating the message to send
     char* returnMessage;
     returnMessage = "ftp";
+
+    //determine the size of the file
+    FILE *file = fopen(filename, "rb");
+    fseek(file, 0, SEEK_END);
+    long size = ftell(file);
+    fseek(file, 0, SEEK_SET);
+    printf("size of file %ld\n", size);
+
+    //determine the number of packets
+    int packetNum = size / 1000 + 1;
+    printf("the number of packets: %d\n", packetNum);
+
+    //creating the packets
+    struct packet * packetList = (struct packet *)malloc(packetNum * (sizeof(struct packet)));
+    long remainingBytes = size;
+
+    for(int i = 1; i <= packetNum; ++i){
+        packetList->total_frag = packetNum;
+        packetList->frag_no = i;
+        packetList->filename = filename;
+
+        long bytesExtracted = 1000;
+        if(remainingBytes < 1000){
+            bytesExtracted = remainingBytes;
+        }
+
+        packetList->size = bytesExtracted;
+        fgets(packetList->filedata, bytesExtracted, file);
+
+    }
+
+    fclose(file);
 
     //setting the sockaddr type
     struct sockaddr_in sockAddy;
