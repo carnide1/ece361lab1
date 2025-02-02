@@ -8,6 +8,7 @@
 #include <stdlib.h>
 #include <netdb.h>
 #include <arpa/inet.h>
+#include <time.h>
 
 //for checking errors
 int errorCheck(char * message){
@@ -17,10 +18,10 @@ int errorCheck(char * message){
 }
 
 int main(int argc, char *argv[]) {
+    //checking validity of the input based on number of inputs
     if( argc != 3){
         printf("Error - Both a Server Address and a Server Port Number are Required.\n");
         return 0;
-    
     } else {
         printf("Server Address: %s\n", argv[1]);
         printf("Server Port Number: %s\n", argv[2]);
@@ -45,6 +46,7 @@ int main(int argc, char *argv[]) {
     // a. if exist, send a message “ftp” to the server
     // b. else, exit
 
+    //checking if the file exists 
     if(access(filename, F_OK | W_OK | X_OK) == -1){
         return errorCheck("File does not exist");
     }
@@ -58,6 +60,7 @@ int main(int argc, char *argv[]) {
         printf("Socket opened! -> %d\n", sock);
     }
 
+    //creating the message to send
     char* returnMessage;
     returnMessage = "ftp";
 
@@ -68,6 +71,11 @@ int main(int argc, char *argv[]) {
     sockAddy.sin_port = htons(atoi(argv[2]));
     inet_pton(AF_INET, argv[1], &sockAddy.sin_addr);
 
+    //getting the time before the message was sent
+    struct timespec before;
+    clock_gettime(CLOCK_MONOTONIC, &before);
+
+    //sending the message
     int sent = sendto(sock, returnMessage, strlen(returnMessage), 0, (struct sockaddr*)&sockAddy, sizeof(sockAddy));
 
     if(sent == -1){
@@ -85,6 +93,7 @@ int main(int argc, char *argv[]) {
     outsideInfo.ss_family = AF_INET;
     socklen_t outsideSize = sizeof(outsideInfo); 
 
+    //waiting for a message
     int recieved = recvfrom(sock, buffer, sizeof(buffer), 0, (struct sockaddr*)&outsideInfo, &outsideSize);
 
     if(recieved == -1){
@@ -93,6 +102,15 @@ int main(int argc, char *argv[]) {
         printf("Successfully recieved %d bytes\n", recieved);
     }
 
+    //getting the time it returned 
+    struct timespec after;
+    clock_gettime(CLOCK_MONOTONIC, &after);
+
+    //outputting the RTT based on the differnce between the time sent and recieved
+    double difference = (after.tv_sec - before.tv_sec) + (after.tv_nsec - before.tv_nsec) / 1e9;
+    printf("2.1 - The measured round-trip time is %.9f seconds long\n", difference);
+
+    //outputting relevant responses to output
     if (strcmp(buffer, "yes") == 0) {
         printf("A file transfer can start\n");
     } else {
