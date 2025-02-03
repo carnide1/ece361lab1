@@ -73,38 +73,6 @@ int main(int argc, char *argv[]) {
     char* returnMessage;
     returnMessage = "ftp";
 
-    //determine the size of the file
-    FILE *file = fopen(filename, "rb");
-    fseek(file, 0, SEEK_END);
-    long size = ftell(file);
-    fseek(file, 0, SEEK_SET);
-    printf("size of file %ld\n", size);
-
-    //determine the number of packets
-    int packetNum = size / 1000 + 1;
-    printf("the number of packets: %d\n", packetNum);
-
-    //creating the packets
-    struct packet * packetList = (struct packet *)malloc(packetNum * (sizeof(struct packet)));
-    long remainingBytes = size;
-
-    for(int i = 1; i <= packetNum; ++i){
-        packetList->total_frag = packetNum;
-        packetList->frag_no = i;
-        packetList->filename = filename;
-
-        long bytesExtracted = 1000;
-        if(remainingBytes < 1000){
-            bytesExtracted = remainingBytes;
-        }
-
-        packetList->size = bytesExtracted;
-        fgets(packetList->filedata, bytesExtracted, file);
-
-    }
-
-    fclose(file);
-
     //setting the sockaddr type
     struct sockaddr_in sockAddy;
     memset(&sockAddy, 0, sizeof(sockAddy));
@@ -158,6 +126,98 @@ int main(int argc, char *argv[]) {
         printf("A file transfer cannot start.\n");
         return 0;
     }
+
+
+    // Part 2
+
+    //determine the size of the file
+    FILE *file = fopen(filename, "rb");
+    fseek(file, 0, SEEK_END);
+    long size = ftell(file);
+    fseek(file, 0, SEEK_SET);
+
+    //determine the number of packets
+    int packetNum = size / 1000 + 1;
+
+    //creating the packets
+    struct packet * packetList = (struct packet *)malloc(packetNum * (sizeof(struct packet)));
+    long remainingBytes = size;
+
+    for (int i = 0; i < packetNum; ++i) {
+        packetList[i].total_frag = packetNum;
+        packetList[i].frag_no = i + 1;
+        packetList[i].filename = filename;
+
+        long bytesExtracted = (remainingBytes < 1000) ? remainingBytes : 1000;
+        packetList[i].size = bytesExtracted;
+        
+        fread(packetList[i].filedata, 1, bytesExtracted, file);
+
+        remainingBytes -= bytesExtracted;
+    }
+
+    fclose(file);
+
+    //sending all the packets
+    for(int i = 0; i < packetNum; ++i){
+        //convert packets to buffer
+        long packetSize = sizeof(packetList[i].total_frag) + sizeof(packetList[i].frag_no) + strlen(packetList[i].filename) + 1 + sizeof(packetList[i].size) + (4*strlen(":")) + packetList[i].size;
+        char packetBuffer[packetSize];
+
+        // Copy header fields into the buffer
+        int offset = 0;
+        memcpy(packetBuffer + offset, &packetList[i].total_frag, sizeof(packetList[i].total_frag));
+        offset += sizeof(packetList[i].total_frag);
+        memcpy(packetBuffer + offset, ":", 1);
+        offset += 1;
+        memcpy(packetBuffer + offset, &packetList[i].frag_no, sizeof(packetList[i].frag_no));
+        offset += sizeof(packetList[i].frag_no);
+        memcpy(packetBuffer + offset, ":", 1);
+        offset += 1;
+        memcpy(packetBuffer + offset, &packetList[i].size, sizeof(packetList[i].size));
+        offset += sizeof(packetList[i].size);
+        memcpy(packetBuffer + offset, ":", 1);
+        offset += 1;
+        memcpy(packetBuffer + offset, packetList[i].filename, strlen(packetList[i].filename) + 1);
+        offset += strlen(packetList[i].filename) + 1;
+        memcpy(packetBuffer + offset, ":", 1);
+        offset += 1;
+        memcpy(packetBuffer + offset, packetList[i].filedata, packetList[i].size);
+        offset += packetList[i].size;
+
+        printf("Buffer contents:\n");
+        for (int i = 0; i < packetSize; ++i) {
+            printf("%c ", (char)packetBuffer[i]);
+        }
+        printf("\n");
+
+        //send the packet buffer to the server
+        int packetSent = sendto(sock, packetBuffer, packetSize, 0, (struct sockaddr*)&sockAddy, sizeof(sockAddy));
+
+        if(sent == -1){
+            return errorCheck("packetSend Error");
+        }else {
+            printf("Successfully sent packet of %d bytes\n", packetSent);
+        }
+
+
+        //wait for an acknowledgment from the server
+        int ackRecv = recvfrom(sock, buffer, sizeof(buffer), 0, (struct sockaddr*)&outsideInfo, &outsideSize);
+
+        if(recieved == -1){
+            return errorCheck("Recieve Ack Error");
+        }else {
+            printf("Successfully recieved ack of %d bytes\n", ackRecv);
+            printf("returned %s\n", buffer);
+        }
+
+        //check if the acknowledgment is ACK or NACK
+
+
+    }
+
+
+
 
     //closing the socket
     int closeSock = close(sock);

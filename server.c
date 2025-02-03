@@ -92,6 +92,60 @@ int main(int argc, char *argv[]) {
         printf("Successfully sent %d bytes\n", sent);
     }
 
+
+    // Part 2
+
+    //waiting for the packet
+    int packetRecv = recvfrom(sock, buffer, sizeof(buffer), 0, (struct sockaddr*)&outsideInfo, &outsideSize);
+
+    if(packetRecv == -1){
+        return errorCheck("Recieve Error");
+    }else {
+        printf("Successfully recieved packet of %d bytes\n", packetRecv);
+    }
+
+    // Print header fields
+        unsigned int total_frag, frag_no, size;
+        char filename[100];
+        int header_offset = 0;
+
+        memcpy(&total_frag, buffer + header_offset, sizeof(total_frag));
+        header_offset += sizeof(total_frag) + 1;  // Skip ':'
+
+        memcpy(&frag_no, buffer + header_offset, sizeof(frag_no));
+        header_offset += sizeof(frag_no) + 1; // Skip ':'
+
+        memcpy(&size, buffer + header_offset, sizeof(size));
+        header_offset += sizeof(size) + 1; // Skip ':'
+
+        strcpy(filename, buffer + header_offset);
+        header_offset += strlen(filename) + 1 + 1;  // Skip filename and ':'
+
+        printf("Total Fragments: %u\n", total_frag);
+        printf("Fragment Number: %u\n", frag_no);
+        printf("Size: %u\n", size);
+        printf("Filename: %s\n", filename);
+
+        // Print filedata in hexadecimal
+        printf("Filedata:\n");
+        for (int j = header_offset; j < (size + header_offset); ++j) {
+            printf("%c ", (char)buffer[j]);
+            if ((j - header_offset + 1) % 16 == 0) {
+                printf("\n");
+            }
+        }
+        printf("\n");
+
+    //returning the appropriate acknowledgement
+    returnMessage = "ack";
+    int ackSent = sendto(sock, returnMessage, sizeof(returnMessage), 0, (struct sockaddr*)&outsideInfo, outsideSize);
+
+    if(sent == -1){
+        return errorCheck("AckSent Error");
+    }else {
+        printf("Successfully sent ack of %d bytes\n", ackSent);
+    }
+
     //closing the socket
     int closeSock = close(sock);
 
