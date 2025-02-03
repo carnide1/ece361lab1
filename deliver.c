@@ -185,12 +185,6 @@ int main(int argc, char *argv[]) {
         memcpy(packetBuffer + offset, packetList[i].filedata, packetList[i].size);
         offset += packetList[i].size;
 
-        printf("Buffer contents:\n");
-        for (int i = 0; i < packetSize; ++i) {
-            printf("%c ", (char)packetBuffer[i]);
-        }
-        printf("\n");
-
         //send the packet buffer to the server
         int packetSent = sendto(sock, packetBuffer, packetSize, 0, (struct sockaddr*)&sockAddy, sizeof(sockAddy));
 
@@ -202,22 +196,25 @@ int main(int argc, char *argv[]) {
 
 
         //wait for an acknowledgment from the server
+        memset(buffer, 0, sizeof(buffer));
         int ackRecv = recvfrom(sock, buffer, sizeof(buffer), 0, (struct sockaddr*)&outsideInfo, &outsideSize);
 
         if(recieved == -1){
             return errorCheck("Recieve Ack Error");
         }else {
             printf("Successfully recieved ack of %d bytes\n", ackRecv);
-            printf("returned %s\n", buffer);
         }
 
         //check if the acknowledgment is ACK or NACK
 
+        if (strcmp(buffer, "ack") == 0) {
+            printf("Received Acknowledgement for packet: %s\n", buffer);
+        } else {
+            printf("Received No Acknowledgement for packet: %s\n", buffer);
+            --i;
+        }
 
     }
-
-
-
 
     //closing the socket
     int closeSock = close(sock);

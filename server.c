@@ -16,6 +16,15 @@ int errorCheck(char * message){
     return err;
 }
 
+//the struct for the packets
+struct packet {
+    unsigned int total_frag;
+    unsigned int frag_no;
+    unsigned int size;
+    char* filename;
+    char filedata[1000];
+};
+
 int main(int argc, char *argv[]) {
     //checking if the correct arguments were given
     if (argc != 2) { 
@@ -96,55 +105,80 @@ int main(int argc, char *argv[]) {
     // Part 2
 
     //waiting for the packet
-    int packetRecv = recvfrom(sock, buffer, sizeof(buffer), 0, (struct sockaddr*)&outsideInfo, &outsideSize);
+    unsigned int total_frag, frag_no, size;
+    char filename[100];
+    int packetNum = 4096;
+    struct packet *packetList = (struct packet *)malloc(packetNum * (sizeof(struct packet)));
 
-    if(packetRecv == -1){
-        return errorCheck("Recieve Error");
-    }else {
-        printf("Successfully recieved packet of %d bytes\n", packetRecv);
-    }
+    do {
+        //cleaning out buffer
+        memset(buffer, 0, sizeof(buffer));
 
-    // Print header fields
-        unsigned int total_frag, frag_no, size;
-        char filename[100];
+        //getting the packet from the client
+        int packetRecv = recvfrom(sock, buffer, sizeof(buffer), 0, (struct sockaddr*)&outsideInfo, &outsideSize);
+
+        if(packetRecv == -1){
+            return errorCheck("Recieve Error");
+        }else {
+            printf("Successfully recieved packet of %d bytes\n", packetRecv);
+        }
+
+        // get header fields
         int header_offset = 0;
 
         memcpy(&total_frag, buffer + header_offset, sizeof(total_frag));
-        header_offset += sizeof(total_frag) + 1;  // Skip ':'
-
+        header_offset += sizeof(total_frag) + 1;
         memcpy(&frag_no, buffer + header_offset, sizeof(frag_no));
-        header_offset += sizeof(frag_no) + 1; // Skip ':'
-
+        header_offset += sizeof(frag_no) + 1;
         memcpy(&size, buffer + header_offset, sizeof(size));
-        header_offset += sizeof(size) + 1; // Skip ':'
-
+        header_offset += sizeof(size) + 1; 
         strcpy(filename, buffer + header_offset);
-        header_offset += strlen(filename) + 1 + 1;  // Skip filename and ':'
+        header_offset += strlen(filename) + 1 + 1; 
 
-        printf("Total Fragments: %u\n", total_frag);
-        printf("Fragment Number: %u\n", frag_no);
-        printf("Size: %u\n", size);
-        printf("Filename: %s\n", filename);
-
-        // Print filedata in hexadecimal
-        printf("Filedata:\n");
-        for (int j = header_offset; j < (size + header_offset); ++j) {
-            printf("%c ", (char)buffer[j]);
-            if ((j - header_offset + 1) % 16 == 0) {
-                printf("\n");
-            }
+        //making sure the array allocated earlier works
+        if(total_frag > packetNum){
+            struct packet * temp = packetList;
+            packetNum = total_frag;
+            packetList = (struct packet *)malloc(packetNum * (sizeof(struct packet)));
+            free(temp);
         }
-        printf("\n");
 
-    //returning the appropriate acknowledgement
-    returnMessage = "ack";
-    int ackSent = sendto(sock, returnMessage, sizeof(returnMessage), 0, (struct sockaddr*)&outsideInfo, outsideSize);
+        //populating the array with the sent packet
+        packetList[frag_no-1].total_frag = total_frag;
+        packetList[frag_no-1].frag_no = frag_no;
+        packetList[frag_no-1].size = size;
+        packetList[frag_no-1].filename = filename;
+        memcpy(packetList[frag_no-1].filedata, buffer + header_offset, size);
 
-    if(sent == -1){
-        return errorCheck("AckSent Error");
-    }else {
-        printf("Successfully sent ack of %d bytes\n", ackSent);
+        //returning the appropriate acknowledgement
+        returnMessage = "ack";
+        int ackSent = sendto(sock, returnMessage, sizeof(returnMessage), 0, (struct sockaddr*)&outsideInfo, outsideSize);
+
+        if(sent == -1){
+            return errorCheck("AckSent Error");
+        }else {
+            printf("Successfully sent ack of %d bytes\n", ackSent);
+        }
+
+    }while(total_frag != frag_no);
+
+    //we've now finished reading all the packets, so we now save it as a file
+
+    char newFilename[4096] = "deliver";
+    strcat(newFilename, filename);
+
+    // create the file
+    FILE *file = fopen(newFilename, "w");
+    if (file == NULL) {
+        return errorCheck("File open error");
     }
+    
+    for(int i = 0; i < total_frag; ++i){
+        fwrite(packetList[i].filedata, sizeof(char), packetList[i].size, file);
+    }    
+
+    fclose(file);
+
 
     //closing the socket
     int closeSock = close(sock);
