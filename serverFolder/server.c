@@ -164,11 +164,8 @@ int main(int argc, char *argv[]) {
 
     //we've now finished reading all the packets, so we now save it as a file
 
-    char newFilename[4096] = "deliver";
-    strcat(newFilename, filename);
-
     // create the file
-    FILE *file = fopen(newFilename, "w");
+    FILE *file = fopen(filename, "w");
     if (file == NULL) {
         return errorCheck("File open error");
     }
